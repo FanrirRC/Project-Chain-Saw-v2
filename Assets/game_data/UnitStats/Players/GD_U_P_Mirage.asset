@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57a036abe2a97f14fb31ffb0801b22ef, type: 3}
+  m_Name: GD_U_P_Mirage
+  m_EditorClassIdentifier: 
+  displayName: Mirage
+  portrait: {fileID: 21300000, guid: f803946b9557400498f8e64ab37ee404, type: 3}
+  maxHP: 45
+  maxSP: 14
+  atk: 5
+  def: 3
+  agi: 3
+  startingSkills:
+  - {fileID: 11400000, guid: 885d2168bff3b1d4d9e43a04d085a7af, type: 2}
