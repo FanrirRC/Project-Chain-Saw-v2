@@ -3,25 +3,6 @@ using UnityEngine;
 
 namespace UI
 {
-    /// <summary>
-    /// Pre-built SP strip:
-    /// - The container already has up to 9 slot children laid out in the prefab.
-    /// - Each slot contains two children: one named SP_Empty and one named SP_Full (configurable).
-    /// - This script only toggles visibility. No instantiation.
-    ///
-    /// Expected hierarchy (example):
-    ///   Skill Points v2 (this)
-    ///     SP (1)
-    ///       SP_Empty  (Image)
-    ///       SP_Full   (Image)
-    ///     SP (2)
-    ///       SP_Empty
-    ///       SP_Full
-    ///     ...
-    ///     SP (9)
-    ///       SP_Empty
-    ///       SP_Full
-    /// </summary>
     public class SPStripUI : MonoBehaviour
     {
         [Header("Slots container")]
@@ -32,9 +13,6 @@ namespace UI
         [SerializeField] private string fullChildName = "SP_Full";
 
         [Header("Options")]
-        [Tooltip("If true, hide slots above maxSP. If false, show empties there.")]
-        [SerializeField] private bool hideBeyondMax = true;
-
         [Tooltip("Discover slots automatically from children when binding.")]
         [SerializeField] private bool autoDiscover = true;
 
@@ -45,12 +23,12 @@ namespace UI
             public GameObject root;
             public GameObject empty;
             public GameObject full;
+            public bool warned;
         }
 
         private readonly List<Slot> slots = new(9);
 
-        // ---------- Public API ----------
-        /// <summary>Bind to a unit; call this when the HUD row gets its unit.</summary>
+        /// <summary>Bind to a unit; call from BattleHUD when assigning the row.</summary>
         public void Bind(CharacterScript unit)
         {
             Unsubscribe();
@@ -63,13 +41,12 @@ namespace UI
             if (bound != null)
             {
                 bound.OnSPChanged += OnSPChanged;
-                bound.OnHPChanged += OnSPChanged; // optional refresh on KO
+                bound.OnHPChanged += OnSPChanged; // refresh on KO
             }
         }
 
         private void OnDestroy() => Unsubscribe();
 
-        // ---------- Internals ----------
         private void Unsubscribe()
         {
             if (bound != null)
@@ -81,48 +58,52 @@ namespace UI
 
         private void OnSPChanged(CharacterScript _) => RefreshAll();
 
-        /// <summary>Find up to 9 slot children and cache their empty/full sub-objects.</summary>
         private void DiscoverSlots()
         {
             slots.Clear();
             if (!container) container = transform;
 
-            // Iterate direct children in order (left->right as in prefab)
             for (int i = 0; i < container.childCount; i++)
             {
                 var slotRootT = container.GetChild(i);
                 if (!slotRootT) continue;
 
-                var slotRoot = slotRootT.gameObject;
-
-                // locate empty & full under this slot
-                Transform emptyT = null, fullT = null;
-
+                // Find SP_Empty (direct)
+                Transform emptyT = null;
                 if (!string.IsNullOrEmpty(emptyChildName))
                     emptyT = slotRootT.Find(emptyChildName);
+
+                // Find SP_Full (try direct, then nested under empty, then deep scan)
+                Transform fullT = null;
                 if (!string.IsNullOrEmpty(fullChildName))
+                {
+                    // direct
                     fullT = slotRootT.Find(fullChildName);
 
-                // fallback: first two children if names not found
-                if (emptyT == null || fullT == null)
-                {
-                    for (int c = 0; c < slotRootT.childCount; c++)
+                    // nested under empty
+                    if (!fullT && emptyT)
+                        fullT = emptyT.Find(fullChildName);
+
+                    // deep scan (inactive too)
+                    if (!fullT)
                     {
-                        var child = slotRootT.GetChild(c);
-                        if (emptyT == null) { emptyT = child; continue; }
-                        if (fullT == null) { fullT = child; break; }
+                        foreach (var t in slotRootT.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (t.name == fullChildName) { fullT = t; break; }
+                        }
                     }
                 }
 
                 var slot = new Slot
                 {
-                    root = slotRoot,
+                    root = slotRootT.gameObject,
                     empty = emptyT ? emptyT.gameObject : null,
-                    full = fullT ? fullT.gameObject : null
+                    full = fullT ? fullT.gameObject : null,
+                    warned = false
                 };
 
                 slots.Add(slot);
-                if (slots.Count == CharacterScript.SP_CAP) break; // stop at 9
+                if (slots.Count == CharacterScript.SP_CAP) break;
             }
         }
 
@@ -138,22 +119,27 @@ namespace UI
                 var s = slots[i];
                 bool withinMax = i < max;
 
-                // Slot root visibility (hide beyond max if desired)
-                if (s.root) s.root.SetActive(!hideBeyondMax || withinMax);
+                if (s.root) s.root.SetActive(withinMax);
 
-                // Empty orb: visible within max (or everywhere if not hiding)
-                if (s.empty)
+                // Empty orbs ALWAYS visible within max
+                if (s.empty) s.empty.SetActive(withinMax);
+
+                // Full star visible for leftmost 'cur' only
+                if (s.full) s.full.SetActive(withinMax && i < cur);
+
+                // Helpful warning once per slot if something’s missing
+                if (withinMax && !s.warned && (!s.empty || !s.full))
                 {
-                    bool showEmpty = withinMax || !hideBeyondMax;
-                    s.empty.SetActive(showEmpty);
+                    s.warned = true;
+                    Debug.LogWarning(
+                        $"[SPStripUI] Slot {i + 1} in '{container.name}' missing child(s). " +
+                        $"Found Empty={(s.empty != null)} Full={(s.full != null)}. " +
+                        $"Expected names: '{emptyChildName}' and '{fullChildName}'.",
+                        container
+                    );
                 }
 
-                // Full star: show for the leftmost 'cur' slots only
-                if (s.full)
-                {
-                    bool showFull = i < cur;
-                    s.full.SetActive(showFull);
-                }
+                slots[i] = s; // write back 'warned'
             }
         }
     }

@@ -8,14 +8,14 @@ namespace UI
 {
     public class ActionListPanel : MonoBehaviour
     {
-        [SerializeField] private Transform content;           // parent for slots (VerticalLayout)
-        [SerializeField] private SkillSlotUI skillSlotPrefab; // existing prefab
-        [SerializeField] private ItemSlotUI itemSlotPrefab;  // existing prefab
-        [SerializeField] private GameObject emptyLabel;      // optional "No entries"
+        [SerializeField] private Transform content;
+        [SerializeField] private SkillSlotUI skillSlotPrefab;
+        [SerializeField] private ItemSlotUI itemSlotPrefab;
+        [SerializeField] private GameObject emptyLabel;
 
         [Header("Keyboard Navigation")]
         [SerializeField] private bool allowKeyboard = true;
-        [SerializeField] private GameObject selectionCursorPrefab;  // prefab of a small Image/arrow
+        [SerializeField] private GameObject selectionCursorPrefab;
         [SerializeField] private Vector2 cursorOffset = new Vector2(-20f, 0f);
 
         public bool WasCancelled { get; private set; }
@@ -27,12 +27,11 @@ namespace UI
         private RectTransform _cursorInstance;
         private Canvas _canvas;
 
-        // ---------- Public API ----------
         public IEnumerator OpenSkills(CharacterScript owner)
         {
             ResetState();
             if (!_canvas) _canvas = GetComponentInParent<Canvas>();
-            PopulateSkills(owner);     // builds buttons & places cursor
+            PopulateSkills(owner);
             yield return KeyboardLoop();
             gameObject.SetActive(false);
         }
@@ -41,14 +40,13 @@ namespace UI
         {
             ResetState();
             if (!_canvas) _canvas = GetComponentInParent<Canvas>();
-            PopulateItems(owner);      // builds buttons & places cursor
+            PopulateItems(owner);
             yield return KeyboardLoop();
             gameObject.SetActive(false);
         }
 
         public void Cancel() => WasCancelled = true;
 
-        // ---------- Populate ----------
         private void PopulateSkills(CharacterScript owner)
         {
             ClearContent();
@@ -68,15 +66,14 @@ namespace UI
             if (emptyLabel) emptyLabel.SetActive(made == 0);
             gameObject.SetActive(true);
 
-            // >>> NEW: force layout so RectTransforms have correct size/pos on first frame
             Canvas.ForceUpdateCanvases();
             var crt = content as RectTransform;
-            if (crt) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
+            if (crt) LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
             Canvas.ForceUpdateCanvases();
 
-            BuildButtonsList();
+            BuildButtonsList();    // ← now includes non-interactable
             EnsureCursor();
-            SelectCurrent();   // now correct on first open
+            SelectCurrent();
         }
 
         private void PopulateItems(CharacterScript owner)
@@ -98,33 +95,37 @@ namespace UI
             if (emptyLabel) emptyLabel.SetActive(made == 0);
             gameObject.SetActive(true);
 
-            // >>> NEW: force layout so RectTransforms have correct size/pos on first frame
             Canvas.ForceUpdateCanvases();
             var crt = content as RectTransform;
-            if (crt) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
+            if (crt) LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
             Canvas.ForceUpdateCanvases();
 
-            BuildButtonsList();
+            BuildButtonsList();    // ← now includes non-interactable
             EnsureCursor();
-            SelectCurrent();   // now correct on first open
+            SelectCurrent();
         }
 
-        // ---------- Keyboard loop ----------
         private IEnumerator KeyboardLoop()
         {
             EventSystem.current?.SetSelectedGameObject(null);
             yield return null;
 
-            // No rebuild here; already built + cursor placed during populate
-            // Keep the list clean during the loop in case slots are destroyed
             while (!WasCancelled && LastPickedSkill == null && LastPickedItem == null)
             {
                 PruneDestroyedButtons();
-                if (_idx >= _buttons.Count) _idx = Mathf.Max(0, _buttons.Count - 1);
-
-                if (allowKeyboard && _buttons.Count > 0)
+                if (_buttons.Count == 0)
                 {
-                    // Only move if there are 2+ entries
+                    // No entries at all. Still allow ESC to go back.
+                    if (Input.GetKeyDown(KeyCode.Escape)) WasCancelled = true;
+                    yield return null;
+                    continue;
+                }
+
+                _idx = Mathf.Clamp(_idx, 0, _buttons.Count - 1);
+                SelectCurrent();
+
+                if (allowKeyboard)
+                {
                     if (_buttons.Count > 1)
                     {
                         if (Input.GetKeyDown(KeyCode.UpArrow))
@@ -141,14 +142,20 @@ namespace UI
 
                     if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
                     {
-                        if (_idx >= 0 && _idx < _buttons.Count && _buttons[_idx])
-                            _buttons[_idx].onClick?.Invoke(); // pick focused slot
+                        var btn = _buttons[_idx];
+                        if (btn && btn.interactable)
+                        {
+                            btn.onClick?.Invoke(); // select
+                        }
+                        else
+                        {
+                            // Optional: play "error" sfx or flash the slot
+                            // Debug.Log("Not enough SP / slot disabled.");
+                        }
                     }
                 }
 
-                // Esc closes the panel and returns to CommandUI
-                if (Input.GetKeyDown(KeyCode.Escape))
-                    WasCancelled = true;
+                if (Input.GetKeyDown(KeyCode.Escape)) WasCancelled = true;
 
                 yield return null;
             }
@@ -156,11 +163,9 @@ namespace UI
             if (_cursorInstance) _cursorInstance.gameObject.SetActive(false);
         }
 
-        // ---------- Callbacks ----------
         private void OnPickSkill(Data.SkillDefinition s) => LastPickedSkill = s;
         private void OnPickItem(Data.ItemDefinition i) => LastPickedItem = i;
 
-        // ---------- Helpers ----------
         private void ResetState()
         {
             WasCancelled = false;
@@ -175,12 +180,13 @@ namespace UI
             _buttons.Clear();
         }
 
+        // *** CHANGED: include ALL active buttons, even when not interactable ***
         private void BuildButtonsList()
         {
             _buttons.Clear();
             foreach (var b in content.GetComponentsInChildren<Button>(true))
             {
-                if (b && b.gameObject.activeInHierarchy && b.interactable)
+                if (b && b.gameObject.activeInHierarchy)
                     _buttons.Add(b);
             }
             _idx = Mathf.Clamp(_idx, 0, Mathf.Max(0, _buttons.Count - 1));
@@ -196,21 +202,18 @@ namespace UI
         {
             if (selectionCursorPrefab && _cursorInstance == null)
             {
-                var go = Instantiate(selectionCursorPrefab, transform.parent); // same canvas/panel
+                var go = Instantiate(selectionCursorPrefab, transform.parent);
                 _cursorInstance = go.GetComponent<RectTransform>();
             }
-            if (_cursorInstance) _cursorInstance.SetAsLastSibling(); // keep on top
+            if (_cursorInstance) _cursorInstance.SetAsLastSibling();
+            if (!_canvas) _canvas = GetComponentInParent<Canvas>();
         }
 
         private void SelectCurrent()
         {
             if (_buttons.Count == 0) return;
 
-            _idx = Mathf.Clamp(_idx, 0, _buttons.Count - 1);
-            var btn = _buttons[_idx];
-            if (!btn) return;
-
-            var go = btn.gameObject;
+            var go = _buttons[_idx].gameObject;
             EventSystem.current?.SetSelectedGameObject(go);
 
             if (_cursorInstance)
@@ -223,7 +226,7 @@ namespace UI
 
                 if (rt && canvasRT)
                 {
-                    // --- LEFT EDGE (Y centered) ---
+                    // Left edge, vertically centered
                     var corners = new Vector3[4];
                     rt.GetWorldCorners(corners);
                     var leftEdgeMidWorld = (corners[0] + corners[1]) * 0.5f;

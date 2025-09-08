@@ -15,15 +15,14 @@ namespace UI
             [Header("Basics")]
             public TMP_Text nameText;
             public TMP_Text hpText;
-            public TMP_Text spText;
+            public TMP_Text spText;         // keep if you still want "SP: cur/max" numbers
 
             [Header("HP Fillers (pick one)")]
             public Image hpFillImage;
             public Slider hpSlider;
 
-            [Header("SP Fillers (pick one)")]
-            public Image spFillImage;
-            public Slider spSlider;
+            [Header("SP Counter (new)")]
+            public SPStripUI spStrip;       // ← assign the "Skill Points v2" object (has SPStripUI)
 
             [Header("Highlight")]
             public GameObject turnHighlight;
@@ -54,6 +53,9 @@ namespace UI
 
                 if (!_cachedLayout && p.infoTransform)
                     p.baseInfoAnchoredPos = p.infoTransform.anchoredPosition;
+
+                // Bind SP strip to the unit (it will listen for SP changes)
+                if (p.spStrip != null) p.spStrip.Bind(p.unit);
 
                 UpdatePanel(p);
             }
@@ -86,7 +88,6 @@ namespace UI
 
         public void Highlight(CharacterScript active) => SetActiveUnit(active);
 
-
         private void UpdatePanel(Panel p)
         {
             if (p == null)
@@ -97,18 +98,21 @@ namespace UI
                 if (p.nameText) p.nameText.text = "-";
                 if (p.hpText) p.hpText.text = "HP:--/--";
                 if (p.spText) p.spText.text = "SP:--/--";
+
                 SetHPFill(p, 0, 0);
-                SetSPFill(p, 0, 0);
+
+                // SP counter is data-driven via SPStripUI; no bar/slider to zero out.
                 ClearStatusIcons(p);
                 return;
             }
 
             if (p.nameText) p.nameText.text = p.unit.characterName;
             if (p.hpText) p.hpText.text = $"HP:{p.unit.currentHP}/{p.unit.maxHP}";
-            if (p.spText) p.spText.text = $"SP:{p.unit.currentSP}/{p.unit.maxSP}";
+            if (p.spText) p.spText.text = $"SP:{p.unit.currentSP}/{p.unit.maxSP}"; // optional numeric text
 
             SetHPFill(p, p.unit.currentHP, p.unit.maxHP);
-            SetSPFill(p, p.unit.currentSP, p.unit.maxSP);
+
+            // SPStripUI reacts to OnSPChanged automatically after Bind(), so no fill logic here.
 
             DrawStatusIcons(p);
         }
@@ -125,21 +129,6 @@ namespace UI
                 if (!Mathf.Approximately(p.hpSlider.maxValue, max))
                     p.hpSlider.maxValue = Mathf.Max(1, max);
                 p.hpSlider.value = Mathf.Clamp(cur, 0, max);
-            }
-        }
-
-        private void SetSPFill(Panel p, int cur, int max)
-        {
-            float ratio = (max <= 0) ? 0f : Mathf.Clamp01(cur / (float)max);
-
-            if (p.spFillImage)
-                p.spFillImage.fillAmount = ratio;
-
-            if (p.spSlider)
-            {
-                if (!Mathf.Approximately(p.spSlider.maxValue, max))
-                    p.spSlider.maxValue = Mathf.Max(1, max);
-                p.spSlider.value = Mathf.Clamp(cur, 0, max);
             }
         }
 
