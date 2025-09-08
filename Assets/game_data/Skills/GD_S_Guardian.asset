@@ -14,12 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: Guardian
   description: Increase party defense by 25%
-  spCost: 5
+  spCost: 3
   icon: {fileID: 0}
   effectType: 2
   TargetsAllies: 1
   TargetsSelfOnly: 0
-  targetsAll: 0
+  targetsAll: 1
   power: 0
   overrideWithPower: 0
   isPercent: 0

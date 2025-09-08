@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: GD_S_Cure
   m_EditorClassIdentifier: 
   displayName: Cure
-  description: Heal small HP
+  description: Heals target small HP
   spCost: 3
   icon: {fileID: 0}
   effectType: 1
   TargetsAllies: 1
   TargetsSelfOnly: 0
-  targetsAll: 1
-  power: 25
+  targetsAll: 0
+  power: 20
   overrideWithPower: 1
   isPercent: 1
   statusToApply: {fileID: 0}

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: GD_U_P_ChainSaw
   m_EditorClassIdentifier: 
   displayName: Chainsaw
-  maxHP: 50
-  maxSP: 8
+  maxHP: 20
+  maxSP: 3
   atk: 5
   def: 3
   agi: 7

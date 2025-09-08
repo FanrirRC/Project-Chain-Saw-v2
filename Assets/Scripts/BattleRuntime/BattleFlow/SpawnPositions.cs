@@ -60,7 +60,10 @@ public class SpawnPositions : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            var go = Instantiate(prefabs[i], spots[i], Quaternion.identity, transform);
+            // Players: normal rotation, Enemies: rotated 180° on Y-axis
+            Quaternion rot = isPlayerSide ? Quaternion.identity : Quaternion.Euler(0f, 180f, 0f);
+
+            var go = Instantiate(prefabs[i], spots[i], rot, transform);
             var unit = go.GetComponent<CharacterScript>() ?? go.GetComponentInChildren<CharacterScript>(true);
             if (!unit)
             {

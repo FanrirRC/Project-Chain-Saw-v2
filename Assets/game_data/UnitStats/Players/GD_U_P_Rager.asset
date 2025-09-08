@@ -13,11 +13,8 @@ MonoBehaviour:
   m_Name: GD_U_P_Rager
   m_EditorClassIdentifier: 
   displayName: Rager
-  portrait: {fileID: 21300000, guid: 2dad9dc54be1f944082c7e5ee10243b6, type: 3}
-  maxHP: 70
-  maxSP: 5
+  maxHP: 25
+  maxSP: 3
   atk: 5
   def: 3
   agi: 5
-  startingSkills:
-  - {fileID: 11400000, guid: f4a08688e02a31844a321665900f43c1, type: 2}
