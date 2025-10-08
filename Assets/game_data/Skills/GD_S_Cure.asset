@@ -19,7 +19,7 @@ MonoBehaviour:
   effectType: 1
   TargetsAllies: 1
   TargetsSelfOnly: 0
-  targetsAll: 0
+  targetsAll: 1
   power: 20
   overrideWithPower: 1
   isPercent: 1

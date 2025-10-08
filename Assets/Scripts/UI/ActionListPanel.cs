@@ -71,7 +71,7 @@ namespace UI
             if (crt) LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
             Canvas.ForceUpdateCanvases();
 
-            BuildButtonsList();    // ← now includes non-interactable
+            BuildButtonsList();
             EnsureCursor();
             SelectCurrent();
         }
@@ -100,7 +100,7 @@ namespace UI
             if (crt) LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
             Canvas.ForceUpdateCanvases();
 
-            BuildButtonsList();    // ← now includes non-interactable
+            BuildButtonsList();
             EnsureCursor();
             SelectCurrent();
         }
@@ -115,7 +115,6 @@ namespace UI
                 PruneDestroyedButtons();
                 if (_buttons.Count == 0)
                 {
-                    // No entries at all. Still allow ESC to go back.
                     if (Input.GetKeyDown(KeyCode.Escape)) WasCancelled = true;
                     yield return null;
                     continue;
@@ -145,12 +144,11 @@ namespace UI
                         var btn = _buttons[_idx];
                         if (btn && btn.interactable)
                         {
-                            btn.onClick?.Invoke(); // select
+                            btn.onClick?.Invoke();
                         }
                         else
                         {
-                            // Optional: play "error" sfx or flash the slot
-                            // Debug.Log("Not enough SP / slot disabled.");
+                            // play "error" sfx
                         }
                     }
                 }
@@ -180,7 +178,6 @@ namespace UI
             _buttons.Clear();
         }
 
-        // *** CHANGED: include ALL active buttons, even when not interactable ***
         private void BuildButtonsList()
         {
             _buttons.Clear();
@@ -226,7 +223,6 @@ namespace UI
 
                 if (rt && canvasRT)
                 {
-                    // Left edge, vertically centered
                     var corners = new Vector3[4];
                     rt.GetWorldCorners(corners);
                     var leftEdgeMidWorld = (corners[0] + corners[1]) * 0.5f;

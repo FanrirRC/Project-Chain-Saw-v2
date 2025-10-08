@@ -11,6 +11,10 @@ namespace Actions
     {
         [SerializeField] private UI.DamagePopup damagePopup;
 
+        [Header("Approach Target")]
+        [SerializeField] private float approachDistance = 1.75f;
+        [SerializeField] private float moveSpeed = 17.5f;
+
         public IEnumerator Execute(CharacterScript actor, UI.CommandDecision decision, List<CharacterScript> targets)
         {
             switch (decision.Type)
@@ -45,94 +49,117 @@ namespace Actions
             }
         }
 
+        private IEnumerator MoveTo(Transform who, Vector3 targetPos, float speed)
+        {
+            if (!who) yield break;
+            while ((who.position - targetPos).sqrMagnitude > 0.0004f)
+            {
+                who.position = Vector3.MoveTowards(who.position, targetPos, speed * Time.deltaTime);
+                yield return null;
+            }
+        }
+
         private IEnumerator DoBasicAttack(CharacterScript actor, List<CharacterScript> targets)
         {
             if (targets == null || targets.Count == 0) yield break;
             var t = targets[0];
             if (!t) yield break;
 
-            // (Optional) face the target
-            Vector3 look = t.transform.position - actor.transform.position;
-            look.y = 0f;
-            if (look.sqrMagnitude > 0.0001f)
-                actor.transform.rotation = Quaternion.LookRotation(look);
+            Vector3 startPos = actor.transform.position;
+            Quaternion startRot = actor.transform.rotation;
 
-            // Play attack and wait the windup
+            Vector3 toT = t.transform.position - actor.transform.position; toT.y = 0f;
+            if (toT.sqrMagnitude > 0.0001f) actor.transform.rotation = Quaternion.LookRotation(toT);
+
+            Vector3 approachPos = t.transform.position - toT.normalized * Mathf.Max(0.05f, approachDistance);
+            approachPos.y = startPos.y; // keep on same plane
+            yield return MoveTo(actor.transform, approachPos, moveSpeed);
+
             actor.PlayAttack();
             yield return new WaitForSeconds(actor.attackWindup);
 
-            // Apply damage
             int dmg = DamageCalculator.Physical(null, actor, t);
             t.SetHP(t.currentHP - dmg);
-
-            // Popup + hurt (if alive)
             if (damagePopup) damagePopup.Spawn(t.transform.position, dmg, false, false);
             if (t.currentHP > 0) t.PlayHurt();
 
-            // Recover delay
             yield return new WaitForSeconds(actor.attackRecover);
             actor.PlayIdle();
 
-            // SP stage 1: restore 1 SP per basic attack action
+            yield return MoveTo(actor.transform, startPos, moveSpeed);
+            actor.transform.rotation = startRot;
+
             actor.GainSP(1);
         }
 
+
         private IEnumerator DoSkill(CharacterScript actor, Data.SkillDefinition skill, List<CharacterScript> targets)
-{
-    if (!skill) yield break;
-
-    // Enforce targets if needed
-    if (!skill.TargetsSelfOnly && (targets == null || targets.Count == 0))
-        yield break;
-
-    // SP cost gate
-    if (actor.currentSP < skill.spCost) yield break;
-    actor.SetSP(actor.currentSP - skill.spCost);
-
-    // Use attack animation as a generic "use skill" for now
-    actor.PlayAttack();
-    yield return new WaitForSeconds(actor.attackWindup);
-
-    if (skill.effectType == Data.SkillDefinition.EffectType.Damage)
-    {
-        foreach (var t in targets)
         {
-            if (!t) continue;
-            int dmg = DamageCalculator.Physical(skill, actor, t, skill.power, skill.overrideWithPower);
-            t.SetHP(t.currentHP - dmg);
-            if (damagePopup) damagePopup.Spawn(t.transform.position, dmg, false, false);
-            if (t.currentHP > 0) t.PlayHurt();
-        }
-    }
-    else if (skill.effectType == Data.SkillDefinition.EffectType.Heal)
-    {
-        // If self-only heal and no targets passed, heal the caster
-        if ((targets == null || targets.Count == 0) && skill.TargetsSelfOnly)
-            targets = new System.Collections.Generic.List<CharacterScript> { actor };
+            if (!skill) yield break;
+            if (!skill.TargetsSelfOnly && (targets == null || targets.Count == 0)) yield break;
+            if (actor.currentSP < skill.spCost) yield break;
+            actor.SetSP(actor.currentSP - skill.spCost);
 
-        foreach (var t in targets)
-        {
-            if (!t) continue;
-            int heal = DamageCalculator.HealAmount(t.maxHP, skill.power, skill.isPercent);
-            t.SetHP(t.currentHP + heal);
-            if (damagePopup) damagePopup.Spawn(t.transform.position, heal, false, true);
-        }
-    }
-    else if (skill.effectType == Data.SkillDefinition.EffectType.ApplyStatus && skill.statusToApply)
-    {
-        if ((targets == null || targets.Count == 0) && skill.TargetsSelfOnly)
-            targets = new System.Collections.Generic.List<CharacterScript> { actor };
-        foreach (var t in targets) if (t) t.AddStatusEffect(skill.statusToApply);
-    }
+            Vector3 startPos = actor.transform.position;
+            Quaternion startRot = actor.transform.rotation;
 
-    yield return new WaitForSeconds(actor.attackRecover);
-}
+            CharacterScript firstTarget = null;
+            if (targets != null) foreach (var z in targets) { if (z) { firstTarget = z; break; } }
+
+            if (firstTarget)
+            {
+                Vector3 toT = firstTarget.transform.position - actor.transform.position; toT.y = 0f;
+                if (toT.sqrMagnitude > 0.0001f) actor.transform.rotation = Quaternion.LookRotation(toT);
+
+                Vector3 approachPos = firstTarget.transform.position - toT.normalized * Mathf.Max(0.05f, approachDistance);
+                approachPos.y = startPos.y;
+                yield return MoveTo(actor.transform, approachPos, moveSpeed);
+            }
+
+            actor.PlayAttack();
+            yield return new WaitForSeconds(actor.attackWindup);
+
+            if (skill.effectType == Data.SkillDefinition.EffectType.Damage)
+            {
+                foreach (var tt in targets)
+                {
+                    if (!tt) continue;
+                    int dmg = DamageCalculator.Physical(skill, actor, tt, skill.power, skill.overrideWithPower);
+                    tt.SetHP(tt.currentHP - dmg);
+                    if (damagePopup) damagePopup.Spawn(tt.transform.position, dmg, false, false);
+                    if (tt.currentHP > 0) tt.PlayHurt();
+                }
+            }
+            else if (skill.effectType == Data.SkillDefinition.EffectType.Heal)
+            {
+                if ((targets == null || targets.Count == 0) && skill.TargetsSelfOnly)
+                    targets = new System.Collections.Generic.List<CharacterScript> { actor };
+                foreach (var tt in targets)
+                {
+                    if (!tt) continue;
+                    int heal = DamageCalculator.HealAmount(tt.maxHP, skill.power, skill.isPercent);
+                    tt.SetHP(tt.currentHP + heal);
+                    if (damagePopup) damagePopup.Spawn(tt.transform.position, heal, false, true);
+                }
+            }
+            else if (skill.effectType == Data.SkillDefinition.EffectType.ApplyStatus && skill.statusToApply)
+            {
+                if ((targets == null || targets.Count == 0) && skill.TargetsSelfOnly)
+                    targets = new System.Collections.Generic.List<CharacterScript> { actor };
+                foreach (var tt in targets) if (tt) tt.AddStatusEffect(skill.statusToApply);
+            }
+
+            yield return new WaitForSeconds(actor.attackRecover);
+            actor.PlayIdle();
+
+            yield return MoveTo(actor.transform, startPos, moveSpeed);
+            actor.transform.rotation = startRot;
+        }
 
         private IEnumerator DoItem(CharacterScript actor, Data.ItemDefinition item, List<CharacterScript> targets)
         {
             if (!item) yield break;
 
-            // NEW: consume 1 if you have an ItemsInventory, otherwise continue silently
             var inv = actor.GetComponent<ItemsInventory>();
             if (inv && !inv.TryConsume(item, 1)) yield break;
 

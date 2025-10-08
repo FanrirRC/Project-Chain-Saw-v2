@@ -17,7 +17,7 @@ public class BattleController : MonoBehaviour
     [SerializeField] private UI.TurnOrderBar orderBar;
 
     [Header("Pacing")]
-    [SerializeField] private float enemyPostActionPause = 0.25f; // tune 0.4–0.8s feels good
+    [SerializeField] private float enemyPostActionPause = 0.25f;
 
 
     private CharacterScript _active;
@@ -107,16 +107,13 @@ public class BattleController : MonoBehaviour
         if (intent.NeedsTarget && (intent.Targets == null || intent.Targets.Count == 0))
             intent.Targets = enemyAI.PickTargetsUnique(intent, spawns.Players, spawns.Enemies, _enemyTargetAvoid);
 
-        // Remember who we chose so next enemy prefers someone else
         if (intent.Targets != null)
             foreach (var t in intent.Targets)
                 if (t) _enemyTargetAvoid.Add(t);
 
-        // Execute action (already includes windup/recover and popups)
         yield return executor.ExecuteIntent(_active, intent);
         hud?.RefreshAll();
 
-        // <-- Give the player time to register the hit before next turn starts
         if (enemyPostActionPause > 0f)
             yield return new WaitForSeconds(enemyPostActionPause);
     }

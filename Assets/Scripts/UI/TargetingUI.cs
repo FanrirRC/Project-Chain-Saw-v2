@@ -24,6 +24,9 @@ namespace UI
         private GameObject _cursorInstance;
         private RectTransform _cursorRT;
 
+        private readonly List<GameObject> _cursorInstancesAll = new();
+        private readonly List<RectTransform> _cursorRTsAll = new();
+
         private void Awake()
         {
             if (!cursorPrefab) return;
@@ -56,33 +59,84 @@ namespace UI
 
             if (live.Count == 0) { WasCancelled = true; gameObject.SetActive(false); yield break; }
 
-            int index = 0;
-            Highlight(live, index);
+            ClearAllCursors();
 
+            // --- NEW: ALL mode — show a cursor on EVERY live target and wait for Enter/Esc ---
+            if (mode == TargetMode.All)
+            {
+                // build ResultTargets immediately
+                ResultTargets.AddRange(live);
+
+                // spawn a cursor for each target
+                foreach (var t in live)
+                {
+                    GameObject c;
+                    RectTransform rt = null;
+
+                    if (useScreenSpaceCursor && screenCanvas && screenCanvas.renderMode != RenderMode.WorldSpace)
+                    {
+                        c = Instantiate(cursorPrefab, screenCanvas.transform);
+                        rt = c.GetComponent<RectTransform>();
+                        // position in screen-space
+                        Vector2 screen = Camera.main ? (Vector2)Camera.main.WorldToScreenPoint(t.transform.position + (Vector3)worldOffset) : Vector2.zero;
+                        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                            (RectTransform)screenCanvas.transform, screen,
+                            screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : screenCanvas.worldCamera,
+                            out var local);
+                        rt.anchoredPosition = local + screenOffset;
+                    }
+                    else
+                    {
+                        c = Instantiate(cursorPrefab);
+                        c.transform.position = t.transform.position + worldOffset;
+                    }
+
+                    c.SetActive(true);
+                    _cursorInstancesAll.Add(c);
+                    if (rt) _cursorRTsAll.Add(rt);
+                }
+
+                // Wait for Enter to confirm or Esc to cancel
+                while (true)
+                {
+                    if (Input.GetKeyDown(KeyCode.Escape)) { WasCancelled = true; break; }
+                    if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) { break; }
+                    // keep the cursors following targets if they move:
+                    if (_cursorRTsAll.Count > 0 && screenCanvas && screenCanvas.renderMode != RenderMode.WorldSpace)
+                    {
+                        for (int i = 0; i < live.Count && i < _cursorRTsAll.Count; i++)
+                        {
+                            var t = live[i];
+                            var rt = _cursorRTsAll[i];
+                            if (!t || !rt) continue;
+                            Vector2 screen = Camera.main ? (Vector2)Camera.main.WorldToScreenPoint(t.transform.position + (Vector3)worldOffset) : Vector2.zero;
+                            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                                (RectTransform)screenCanvas.transform, screen,
+                                screenCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : screenCanvas.worldCamera,
+                                out var local);
+                            rt.anchoredPosition = local + screenOffset;
+                        }
+                    }
+                    yield return null;
+                }
+
+                ClearAllCursors();
+                gameObject.SetActive(false);
+                yield break;
+            }
+
+            int index = 0;
+            Highlight(live, index); // your existing single-cursor highlight
             while (true)
             {
-                if (Input.GetKeyDown(KeyCode.LeftArrow))
-                {
-                    index = (index - 1 + live.Count) % live.Count;
-                    Highlight(live, index);
-                }
-                if (Input.GetKeyDown(KeyCode.RightArrow))
-                {
-                    index = (index + 1) % live.Count;
-                    Highlight(live, index);
-                }
+                if (Input.GetKeyDown(KeyCode.LeftArrow)) { index = (index - 1 + live.Count) % live.Count; Highlight(live, index); }
+                if (Input.GetKeyDown(KeyCode.RightArrow)) { index = (index + 1) % live.Count; Highlight(live, index); }
                 if (Input.GetKeyDown(KeyCode.Escape)) { WasCancelled = true; break; }
-                if (Input.GetKeyDown(KeyCode.Return)) { break; }
+                if (Input.GetKeyDown(KeyCode.Return)) { ResultTargets.Clear(); ResultTargets.Add(live[index]); break; }
                 yield return null;
             }
 
-            if (!WasCancelled)
-            {
-                if (mode == TargetMode.All) ResultTargets.AddRange(live);
-                else ResultTargets.Add(live[index]);
-            }
-
-            if (_cursorInstance) _cursorInstance.SetActive(false);
+            _cursorInstance?.SetActive(false);
             gameObject.SetActive(false);
         }
 
@@ -108,6 +162,14 @@ namespace UI
                     _cursorInstance.transform.position = u.transform.position + worldOffset;
                 }
             }
+        }
+
+        private void ClearAllCursors()
+        {
+            if (_cursorInstance) _cursorInstance.SetActive(false);
+            foreach (var go in _cursorInstancesAll) if (go) Destroy(go);
+            _cursorInstancesAll.Clear();
+            _cursorRTsAll.Clear();
         }
     }
 }
